@@ -1,4 +1,4 @@
-package com.monzo.web_crawler;
+package com.monzo.web_crawler.configuration;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
