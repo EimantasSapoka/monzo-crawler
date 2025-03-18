@@ -22,15 +22,17 @@ public class Crawler {
     private final WebService webService;
 
     private final Queue<UrlNode> workQueue = new ConcurrentLinkedQueue<>();
-    private final URI domain;
+    private final URI rootUri;
+    private final String host;
 
-    public Crawler(WebService webService, URI domain) {
+    public Crawler(WebService webService, URI rootUri) {
         this.webService = webService;
-        this.domain = domain;
+        this.rootUri = rootUri;
+        this.host = getUrlDomain(rootUri.getHost());
     }
 
     public UrlNode crawl() {
-        UrlNode root = new UrlNode(domain, null);
+        UrlNode root = new UrlNode(rootUri, null);
         workQueue.add(root);
 
         while (!workQueue.isEmpty()) {
@@ -58,18 +60,21 @@ public class Crawler {
 
             if (uri != null) {
                 UrlNode urlNode = new UrlNode(uri, currentUrl);
+                String urlDomain = getUrlDomain(uri.getHost());
 
                 if (currentUrl.hasAncestor(uri)) {
-                    logger.debug("Skipping url {} as it is already in node's ancestry", uri);
+                    logger.debug("Skipping url {} as it is already in node's {} ancestry", uri, currentUrl.getUrl());
                 } else if (currentUrl.containsChild(uri)) {
-                    logger.debug("Skipping url {} as it is already in node's children", uri);
+                    logger.debug("Skipping url {} as it is already in node's {} children", uri, currentUrl.getUrl());
+                } else if (!StringUtils.equals(urlDomain, host)) {
+                    logger.debug("Skipping url {} as it is not from the same host {}", uri, host);
                 } else {
                     logger.debug("Adding url {} to work queue", uri);
                     workQueue.add(urlNode);
                 }
 
                 if (currentUrl.containsChild(urlNode.getUrl())) {
-                    logger.debug("Skipping url node {} as it is already in node's children", urlNode.getUrl());
+                    logger.debug("Skipping url node {} as it is already in node's {} children", urlNode.getUrl(), currentUrl.getUrl());
                 } else {
                     logger.debug("Adding url node {} as child to node {}", uri, currentUrl.getUrl());
                     currentUrl.addChild(urlNode);
@@ -77,6 +82,10 @@ public class Crawler {
             }
         }
 
+    }
+
+    private static String getUrlDomain(String uri) {
+        return uri.startsWith("www.") ? uri.substring(4) : uri;
     }
 
     private static URI createUri(URI basePath, Element link) {

@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,11 +35,11 @@ public class CrawlerUnitTest {
 
     private Crawler crawler;
 
-    private final URI domain = URI.create("https://www.test.com");
+    private final URI rootUrl = URI.create("https://www.monzo.com");
 
     @BeforeEach
     void setUp() {
-        crawler = new Crawler(webService, domain);
+        crawler = new Crawler(webService, rootUrl);
     }
 
     @Value("classpath:/service/monzo_page.html")
@@ -49,24 +51,27 @@ public class CrawlerUnitTest {
     @Value("classpath:/service/empty_page.html")
     private Resource emptyPage;
 
+    @Captor
+    ArgumentCaptor<String> urlCaptor;
+
     @Test
     public void crawl_monzoPage_makesRequestToUrlsWithinPage_returnsAllUrlsFromPage_noDuplicates() throws IOException {
         // ARRANGE
         Document monzoDocument = Jsoup.parse(monzoPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(domain.toString())).thenReturn(monzoDocument);
+        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(monzoDocument);
 
-        Document monzoFaqDocument = Jsoup.parse(monzoPage.getContentAsString(StandardCharsets.UTF_8));
+        Document monzoFaqDocument = Jsoup.parse(monzoFaqPage.getContentAsString(StandardCharsets.UTF_8));
         Mockito.when(webService.getDocument("https://monzo.com/faq")).thenReturn(monzoFaqDocument);
 
         // any other page should return empty page with no links to simplify
         Document emptyDocument = Jsoup.parse(emptyPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(Mockito.argThat(url -> !url.equals("https://www.test.com") && !url.equals("https://monzo.com/faq")))).thenReturn(emptyDocument);
+        Mockito.when(webService.getDocument(Mockito.argThat(url -> !url.equals(rootUrl.toString()) && !url.equals("https://monzo.com/faq")))).thenReturn(emptyDocument);
 
         // ACT
         UrlNode result = crawler.crawl();
 
         // ASSERT
-        Assertions.assertEquals(domain, result.getUrl());
+        Assertions.assertEquals(rootUrl, result.getUrl());
         Assertions.assertEquals(67, result.getChildren().size());
         Set<String> uniqueChildUrls = result.getChildren().stream().map(child -> child.getUrl().toString()).collect(Collectors.toSet());
         Assertions.assertEquals(uniqueChildUrls.size(), result.getChildren().size(), "There should be no duplicate child URLs");
@@ -76,7 +81,12 @@ public class CrawlerUnitTest {
                 .filter(node -> StringUtils.equals(node.getUrl().toString(), "https://monzo.com/faq"))
                 .findFirst().get();
 
-        Assertions.assertEquals(66, monzoFaqNode.getChildren().size());
+        Assertions.assertEquals(71, monzoFaqNode.getChildren().size());
+
+        // verify all calls to web service to retrieve documents are for monzo.com domain as per requirement
+        Mockito.verify(webService, Mockito.atLeast(1)).getDocument(urlCaptor.capture());
+        String expectedDomain = rootUrl.getHost().replace("www.", "");
+        urlCaptor.getAllValues().forEach(url -> Assertions.assertEquals(URI.create(url).getHost().replace("www.", ""), expectedDomain));
     }
 
 
@@ -87,21 +97,18 @@ public class CrawlerUnitTest {
     public void crawl_testUrlPage_parsesAllTypesOfUrl_returnsCorrectListOfUrls() throws IOException {
         // ARRANGE
         Document stubDocument = Jsoup.parse(stubPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(domain.toString())).thenReturn(stubDocument);
-
-        Document emptyDocument = Jsoup.parse(emptyPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(Mockito.argThat(url -> !url.equals("https://www.test.com")))).thenReturn(emptyDocument);
+        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(stubDocument);
 
         // ACT
         UrlNode result = crawler.crawl();
 
         // ASSERT
-        Assertions.assertEquals(result.getUrl(), domain);
+        Assertions.assertEquals(result.getUrl(), rootUrl);
         List<UrlNode> children = result.getChildren();
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "http://example.org")));
-        Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().getPath(), domain.getPath() + "/relative/path")));
-        Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().getPath(), domain.getPath() + "/relative2.html")));
+        Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().getPath(), rootUrl.getPath() + "/relative/path")));
+        Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().getPath(), rootUrl.getPath() + "/relative2.html")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/page")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/nested")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/hidden")));
@@ -134,16 +141,16 @@ public class CrawlerUnitTest {
     public void crawl_cyclicalLink_doesNotLoopForever() throws IOException {
         // ARRANGE
         Document cyclicalDocument = Jsoup.parse(cyclicalLinkPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(domain.toString())).thenReturn(cyclicalDocument);
-        Mockito.when(webService.getDocument("https://cycle.com")).thenReturn(cyclicalDocument);
+        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(cyclicalDocument);
+        Mockito.when(webService.getDocument("https://monzo.com/cycle")).thenReturn(cyclicalDocument);
 
         // ACT
         UrlNode result = crawler.crawl();
 
         // ASSERT
-        Assertions.assertEquals(domain, result.getUrl());
+        Assertions.assertEquals(rootUrl, result.getUrl());
         Assertions.assertEquals(1, result.getChildren().size(), "There should be one child URL");
-        Assertions.assertEquals("https://cycle.com", result.getChildren().stream().findFirst().get().getUrl().toString(), "Child URL should be cycle.com");
+        Assertions.assertEquals("https://monzo.com/cycle", result.getChildren().stream().findFirst().get().getUrl().toString(), "Child URL should be monzo.com/cycle");
     }
 
 
