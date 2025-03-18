@@ -1,5 +1,6 @@
 package com.monzo.web_crawler.crawler.model;
 
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -8,12 +9,13 @@ import java.util.List;
 
 @Getter
 @RequiredArgsConstructor
-public class CrawlResult {
+public class NestedUrl {
 
     private final String url;
-    private final List<CrawlResult> children;
+    private final List<NestedUrl> children;
 
-    public CrawlResult(String url) {
+    public NestedUrl(String url) {
         this(url, new ArrayList<>());
     }
+
 }
