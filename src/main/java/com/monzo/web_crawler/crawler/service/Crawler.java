@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.service;
 
-import com.monzo.web_crawler.crawler.model.NestedUrl;
+import com.monzo.web_crawler.crawler.model.UrlNode;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.utils.URIBuilder;
 import org.jsoup.nodes.Document;
@@ -11,8 +11,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -23,48 +21,56 @@ public class Crawler {
 
     private final WebService webService;
 
-    private final Queue<NestedUrl> workQueue = new ConcurrentLinkedQueue<>();
-    private final Map<String, String> visitedPaths = new HashMap<>();
+    private final Queue<UrlNode> workQueue = new ConcurrentLinkedQueue<>();
 
     public Crawler(WebService webService) {
         this.webService = webService;
     }
 
-    public NestedUrl crawl(URI domain) {
-        NestedUrl root = new NestedUrl(domain);
+    public UrlNode crawl(URI domain) {
+        UrlNode root = new UrlNode(domain, null);
         workQueue.add(root);
 
-        NestedUrl currentUrl;
-        Document doc;
         while (!workQueue.isEmpty()) {
-            currentUrl = workQueue.poll();
-            String path = currentUrl.getUrl().toString();
-            try {
-                doc = webService.getDocument(path);
-                Elements links = doc.select("a[href]");
-
-                for (Element link : links) {
-                    URI uri = createUri(currentUrl.getUrl(), link);
-
-                    if (uri != null) {
-                        NestedUrl nestedUrl = new NestedUrl(uri);
-
-                        // add it to the work queue be crawled
-                        if (!visitedPaths.containsKey(uri.toString())) {
-                            visitedPaths.put(uri.toString(), uri.toString());
-                            currentUrl.addChild(nestedUrl);
-                            workQueue.add(nestedUrl);
-                        }
-                    }
-
-
-                }
-            } catch (Exception e) {
-                logger.error("Failed to fetch document from url {}", path, e);
-            }
+            processNestedUrl(workQueue.poll());
         }
 
         return root;
+    }
+
+    private void processNestedUrl(UrlNode currentUrl) {
+        logger.debug("Processing url {}", currentUrl.getUrl());
+        Document doc;
+        String path = currentUrl.getUrl().toString();
+        try {
+            doc = webService.getDocument(path);
+        } catch (Exception e) {
+            logger.error("Failed to fetch document from url {}", path, e);
+            return;
+        }
+
+        Elements links = doc.select("a[href]");
+
+        for (Element link : links) {
+            URI uri = createUri(currentUrl.getUrl(), link);
+
+            if (uri != null) {
+                UrlNode urlNode = new UrlNode(uri, currentUrl);
+                logger.debug("Adding url node {} as child to node {}", uri, currentUrl.getUrl());
+
+                if (currentUrl.hasAncestor(uri)) {
+                    logger.debug("Skipping url {} as it is already in node's ancestry", uri);
+                } else if (currentUrl.containsChild(uri)) {
+                    logger.debug("Skipping url {} as it is already in node's children", uri);
+                } else {
+                    logger.debug("Adding url {} to work queue", uri);
+                    workQueue.add(urlNode);
+                }
+
+                currentUrl.addChild(urlNode);
+            }
+        }
+
     }
 
     private static URI createUri(URI basePath, Element link) {

@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.service;
 
-import com.monzo.web_crawler.crawler.model.NestedUrl;
+import com.monzo.web_crawler.crawler.model.UrlNode;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -18,7 +18,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.Set;
 
 @ExtendWith(SpringExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -51,14 +51,14 @@ public class CrawlerUnitTest {
         Mockito.when(webService.getDocument(Mockito.matches("^(?!www\\.monzo\\.com$).*"))).thenReturn(emptyDocument);
 
         // ACT
-        NestedUrl result = crawler.crawl(domain);
+        UrlNode result = crawler.crawl(domain);
 
         // ASSERT
         Assertions.assertEquals(result.getUrl(), domain);
         Assertions.assertEquals(result.getChildren().size(), 31);
     }
 
-    @Value("classpath:/service/test_page_links.html")
+    @Value("classpath:/service/test_url_links.html")
     private Resource stubPage;
 
     @Test
@@ -72,11 +72,11 @@ public class CrawlerUnitTest {
         Mockito.when(webService.getDocument(Mockito.matches("^(?!https://www\\.monzo\\.com$).*"))).thenReturn(emptyDocument);
 
         // ACT
-        NestedUrl result = crawler.crawl(domain);
+        UrlNode result = crawler.crawl(domain);
 
         // ASSERT
         Assertions.assertEquals(result.getUrl(), domain);
-        List<NestedUrl> children = result.getChildren();
+        Set<UrlNode> children = result.getChildren();
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "http://example.org")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().getPath(), domain.getPath() + "/relative/path")));
@@ -99,6 +99,26 @@ public class CrawlerUnitTest {
 
         // crawler does not support iframes
         Assertions.assertFalse(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/iframe-content")));
+    }
+
+    @Value("classpath:/service/cyclical_link.html")
+    private Resource cyclicalLinkPage;
+
+    @Test
+    public void crawl_cyclicalLink_doesNotLoopForever() throws IOException {
+        // ARRANGE
+        URI domain = URI.create("https://www.monzo.com");
+        Document cyclicalDocument = Jsoup.parse(cyclicalLinkPage.getContentAsString(StandardCharsets.UTF_8));
+        Mockito.when(webService.getDocument(domain.toString())).thenReturn(cyclicalDocument);
+        Mockito.when(webService.getDocument("https://test.com")).thenReturn(cyclicalDocument);
+
+        // ACT
+        UrlNode result = crawler.crawl(domain);
+
+        // ASSERT
+        Assertions.assertEquals(result.getUrl(), domain);
+        Assertions.assertEquals(result.getChildren().size(), 1);
+        Assertions.assertEquals(result.getChildren().stream().findFirst().get().getUrl().toString(), "https://test.com");
     }
 
 

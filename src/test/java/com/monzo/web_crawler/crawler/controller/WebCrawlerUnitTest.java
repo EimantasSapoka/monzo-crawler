@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.controller;
 
-import com.monzo.web_crawler.crawler.model.NestedUrl;
+import com.monzo.web_crawler.crawler.model.UrlNode;
 import com.monzo.web_crawler.crawler.service.CrawlerService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,7 +14,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.net.URI;
-import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -34,10 +33,10 @@ public class WebCrawlerUnitTest {
     @Test
     public void postCrawlerRequest_callsCrawlerService() throws Exception {
         // ARRANGE
-
-        Mockito.when(crawlerService.crawl(Mockito.eq(URI.create("https://www.monzo.com")))).thenReturn(
-                new NestedUrl(URI.create("www.monzo.com"), List.of(new NestedUrl(URI.create("www.monzo.com/help"))))
-        );
+        UrlNode rootNode = new UrlNode(URI.create("www.monzo.com"), null);
+        UrlNode childNode = new UrlNode(URI.create("www.monzo.com/help"), rootNode);
+        rootNode.addChild(childNode);
+        Mockito.when(crawlerService.crawl(Mockito.eq(URI.create("https://www.monzo.com")))).thenReturn(rootNode);
 
         String requestBody = """
                 {

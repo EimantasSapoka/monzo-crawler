@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.controller;
 
-import com.monzo.web_crawler.crawler.model.NestedUrl;
+import com.monzo.web_crawler.crawler.model.UrlNode;
 import com.monzo.web_crawler.crawler.service.CrawlerService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -28,10 +28,10 @@ public class WebCrawlerController {
     }
 
     @PostMapping(value = "/v1/crawl", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<NestedUrl> crawl(@RequestBody @Valid CrawlRequest crawlRequest) {
+    public ResponseEntity<UrlNode> crawl(@RequestBody @Valid CrawlRequest crawlRequest) {
         try {
             URI domain = URI.create(crawlRequest.getDomain());
-            NestedUrl crawlResponse = crawlerService.crawl(domain);
+            UrlNode crawlResponse = crawlerService.crawl(domain);
             return ResponseEntity.ok(crawlResponse);
         } catch (Exception e) {
             logger.error("Failed to crawl url {}", crawlRequest.getDomain(), e);

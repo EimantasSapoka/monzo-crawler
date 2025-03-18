@@ -1,7 +1,7 @@
 package com.monzo.web_crawler.crawler.service;
 
 
-import com.monzo.web_crawler.crawler.model.NestedUrl;
+import com.monzo.web_crawler.crawler.model.UrlNode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,7 +25,7 @@ public class CrawlerServiceUnitTest {
         URI domain = URI.create("www.monzo.com");
 
         // ACT
-        NestedUrl result = crawlerService.crawl(domain);
+        UrlNode result = crawlerService.crawl(domain);
 
         // ASSERT
         Assertions.assertEquals(result.getUrl(), domain);
