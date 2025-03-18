@@ -22,12 +22,14 @@ public class Crawler {
     private final WebService webService;
 
     private final Queue<UrlNode> workQueue = new ConcurrentLinkedQueue<>();
+    private final URI domain;
 
-    public Crawler(WebService webService) {
+    public Crawler(WebService webService, URI domain) {
         this.webService = webService;
+        this.domain = domain;
     }
 
-    public UrlNode crawl(URI domain) {
+    public UrlNode crawl() {
         UrlNode root = new UrlNode(domain, null);
         workQueue.add(root);
 
@@ -56,7 +58,6 @@ public class Crawler {
 
             if (uri != null) {
                 UrlNode urlNode = new UrlNode(uri, currentUrl);
-                logger.debug("Adding url node {} as child to node {}", uri, currentUrl.getUrl());
 
                 if (currentUrl.hasAncestor(uri)) {
                     logger.debug("Skipping url {} as it is already in node's ancestry", uri);
@@ -67,7 +68,12 @@ public class Crawler {
                     workQueue.add(urlNode);
                 }
 
-                currentUrl.addChild(urlNode);
+                if (currentUrl.containsChild(urlNode.getUrl())) {
+                    logger.debug("Skipping url node {} as it is already in node's children", urlNode.getUrl());
+                } else {
+                    logger.debug("Adding url node {} as child to node {}", uri, currentUrl.getUrl());
+                    currentUrl.addChild(urlNode);
+                }
             }
         }
 

@@ -15,7 +15,7 @@ public class CrawlerService {
     }
 
     public UrlNode crawl(URI domain) {
-        Crawler crawler = new Crawler(webService);
-        return crawler.crawl(domain);
+        Crawler crawler = new Crawler(webService, domain);
+        return crawler.crawl();
     }
 }

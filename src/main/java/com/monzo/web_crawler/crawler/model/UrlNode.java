@@ -4,9 +4,8 @@ package com.monzo.web_crawler.crawler.model;
 import lombok.Getter;
 
 import java.net.URI;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 
@@ -14,7 +13,7 @@ public class UrlNode {
 
     private final URI url;
     private final UrlNode parent;
-    private final Set<UrlNode> children = new HashSet<>();
+    private final List<UrlNode> children = new ArrayList<>();
 
     public UrlNode(URI url, UrlNode parent) {
         this.url = url;
@@ -47,15 +46,4 @@ public class UrlNode {
         return children.stream().anyMatch(child -> child.getUrl().equals(uri));
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        UrlNode urlNode = (UrlNode) o;
-        return Objects.equals(url, urlNode.url) && Objects.equals(parent, urlNode.parent);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(url, parent);
-    }
 }
