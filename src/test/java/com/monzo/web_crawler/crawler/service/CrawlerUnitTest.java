@@ -55,6 +55,7 @@ public class CrawlerUnitTest {
 
         // ASSERT
         Assertions.assertEquals(result.getUrl(), domain);
+        Assertions.assertEquals(result.getChildren().size(), 31);
     }
 
     @Value("classpath:/service/test_page_links.html")
@@ -63,13 +64,12 @@ public class CrawlerUnitTest {
     @Test
     public void crawl_stubPage_parsesAllTypesOfUrl_returnsCorrectListOfUrls() throws IOException {
         // ARRANGE
-        URI domain = URI.create("www.monzo.com");
+        URI domain = URI.create("https://www.monzo.com");
         Document stubDocument = Jsoup.parse(stubPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(domain.getPath())).thenReturn(stubDocument);
+        Mockito.when(webService.getDocument(domain.toString())).thenReturn(stubDocument);
 
         Document emptyDocument = Jsoup.parse(emptyPage.getContentAsString(StandardCharsets.UTF_8));
-        Mockito.when(webService.getDocument(Mockito.matches("^(?!www\\.monzo\\.com$).*"))).thenReturn(emptyDocument);
-
+        Mockito.when(webService.getDocument(Mockito.matches("^(?!https://www\\.monzo\\.com$).*"))).thenReturn(emptyDocument);
 
         // ACT
         NestedUrl result = crawler.crawl(domain);
@@ -85,16 +85,20 @@ public class CrawlerUnitTest {
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/nested")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/hidden")));
         Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/image-link")));
-        Assertions.assertTrue(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/iframe-content")));
+
 
         // more interesting cases
 
         // there should only be one /page link as there's one with query string and one with anchor link. They're the same page.
         Assertions.assertEquals(1, children.stream().filter(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/page")).count());
+        Assertions.assertEquals(1, children.stream().filter(url -> StringUtils.equals(url.getUrl().toString(), "https://repeated.com")).count());
 
         // below two should not be captured even though they're anchor links
         Assertions.assertFalse(children.stream().anyMatch(url -> StringUtils.contains(url.getUrl().toString(), "mailto:test@example.com")));
         Assertions.assertFalse(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "tel:+123456789")));
+
+        // crawler does not support iframes
+        Assertions.assertFalse(children.stream().anyMatch(url -> StringUtils.equals(url.getUrl().toString(), "https://example.com/iframe-content")));
     }
 
 
