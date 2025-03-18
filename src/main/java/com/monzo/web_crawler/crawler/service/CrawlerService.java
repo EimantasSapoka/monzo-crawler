@@ -8,7 +8,14 @@ import java.net.URI;
 @Service
 public class CrawlerService {
 
+    private final WebService webService;
+
+    public CrawlerService(WebService webService) {
+        this.webService = webService;
+    }
+
     public NestedUrl crawl(URI domain) {
-        return null;
+        Crawler crawler = new Crawler(webService);
+        return crawler.crawl(domain);
     }
 }

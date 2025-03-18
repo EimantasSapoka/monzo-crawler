@@ -36,7 +36,7 @@ public class WebCrawlerUnitTest {
         // ARRANGE
 
         Mockito.when(crawlerService.crawl(Mockito.eq(URI.create("https://www.monzo.com")))).thenReturn(
-                new NestedUrl("www.monzo.com", List.of(new NestedUrl("www.monzo.com/help")))
+                new NestedUrl(URI.create("www.monzo.com"), List.of(new NestedUrl(URI.create("www.monzo.com/help"))))
         );
 
         String requestBody = """
