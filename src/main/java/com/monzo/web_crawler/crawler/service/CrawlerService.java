@@ -31,6 +31,7 @@ public class CrawlerService {
     }
 
     public UrlNode crawl(URI domain) {
+        long startTime = System.currentTimeMillis(); // Start time for performance monitoring
         UrlNode root = new UrlNode(domain, null);
 
         // setup thread safe collections to allow for parallel crawling
@@ -90,6 +91,9 @@ public class CrawlerService {
                 throw new RuntimeException("Thread pool interrupted during execution", e);
             }
         }
+
+        long endTime = System.currentTimeMillis(); // End time for performance monitoring
+        logger.info("Crawling completed in {} ms", (endTime - startTime));
 
         return root;
     }
