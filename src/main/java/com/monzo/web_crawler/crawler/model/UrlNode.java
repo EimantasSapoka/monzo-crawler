@@ -46,4 +46,14 @@ public class UrlNode {
         return children.stream().anyMatch(child -> child.getUrl().equals(uri));
     }
 
+    public void clearChildren() {
+        children.clear();
+    }
+
+    public UrlNode clone(UrlNode parent) {
+        UrlNode urlNode = new UrlNode(url, parent);
+        children.forEach(child -> urlNode.addChild(child.clone(urlNode)));
+        return urlNode;
+    }
+
 }

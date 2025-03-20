@@ -2,18 +2,15 @@ package com.monzo.web_crawler.crawler.service;
 
 import com.monzo.web_crawler.crawler.model.UrlNode;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.client.utils.URIBuilder;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
 
 public class Crawler {
 
@@ -22,6 +19,7 @@ public class Crawler {
     private final WebService webService;
 
     private final Queue<UrlNode> workQueue = new ConcurrentLinkedQueue<>();
+    private final Map<String, UrlNode> visitedUrls = new ConcurrentHashMap<>();
     private final URI rootUri;
     private final String host;
 
@@ -36,86 +34,77 @@ public class Crawler {
         workQueue.add(root);
 
         while (!workQueue.isEmpty()) {
-            processNestedUrl(workQueue.poll());
+            processUrlNode(workQueue.poll());
         }
 
         return root;
     }
 
-    private void processNestedUrl(UrlNode currentUrl) {
-        logger.debug("Processing url {}", currentUrl.getUrl());
-        Document doc;
-        String path = currentUrl.getUrl().toString();
+    private void processUrlNode(UrlNode currentPageNode) {
+        logger.debug("Processing url {}", currentPageNode.getUrl());
+
+        String path = currentPageNode.getUrl().toString();
+        List<String> pageUrls;
         try {
-            doc = webService.getDocument(path);
+            pageUrls = webService.getDocument(path);
+            visitedUrls.put(currentPageNode.getUrl().toString(), currentPageNode);
         } catch (Exception e) {
             logger.error("Failed to fetch document from url {}", path, e);
             return;
         }
 
-        Elements links = doc.select("a[href]");
-
-        for (Element link : links) {
-            URI uri = createUri(currentUrl.getUrl(), link);
+        for (String url : pageUrls) {
+            URI uri = URIUtils.createUri(currentPageNode.getUrl(), url);
 
             if (uri != null) {
-                UrlNode urlNode = new UrlNode(uri, currentUrl);
+                UrlNode urlNode = getOrCreateUrlNode(currentPageNode, uri);
                 String urlDomain = getUrlDomain(uri.getHost());
 
-                if (currentUrl.hasAncestor(uri)) {
-                    logger.debug("Skipping url {} as it is already in node's {} ancestry", uri, currentUrl.getUrl());
-                } else if (currentUrl.containsChild(uri)) {
-                    logger.debug("Skipping url {} as it is already in node's {} children", uri, currentUrl.getUrl());
+                if (currentPageNode.hasAncestor(uri)) {
+                    logger.debug("Skipping url from being added to work queue {} as it is already in node's {} ancestry", uri, currentPageNode.getUrl());
+                } else if (currentPageNode.containsChild(uri)) {
+                    logger.debug("Skipping url from being added to work queue {} as it is already in node's {} children", uri, currentPageNode.getUrl());
                 } else if (!StringUtils.equals(urlDomain, host)) {
-                    logger.debug("Skipping url {} as it is not from the same host {}", uri, host);
+                    logger.debug("Skipping url from being added to work queue {} as it is not from the same host {}", uri, host);
+                } else if (visitedUrls.containsKey(uri.toString())) {
+                    logger.debug("Skipping url from being added to work queue {} as it has already been visited", uri);
                 } else {
                     logger.debug("Adding url {} to work queue", uri);
                     workQueue.add(urlNode);
                 }
 
-                if (currentUrl.containsChild(urlNode.getUrl())) {
-                    logger.debug("Skipping url node {} as it is already in node's {} children", urlNode.getUrl(), currentUrl.getUrl());
+                if (currentPageNode.containsChild(urlNode.getUrl())) {
+                    logger.debug("Skipping url node {} from being added as child as it is already in node's {} children", urlNode.getUrl(), currentPageNode.getUrl());
+                } else if (currentPageNode.getUrl().equals(urlNode.getUrl())) {
+                    logger.debug("Skipping url node {} from being added as child as it is the same as node's {}", urlNode.getUrl(), currentPageNode.getUrl());
+                } else if (currentPageNode.hasAncestor(urlNode.getUrl())) {
+                    logger.debug("Url {} is already present in the ancestry of current node {}. Creating a clone of node with no children to prevent cycles", urlNode.getUrl(), currentPageNode.getUrl());
+                    urlNode.clearChildren();
+                    currentPageNode.addChild(urlNode);
                 } else {
-                    logger.debug("Adding url node {} as child to node {}", uri, currentUrl.getUrl());
-                    currentUrl.addChild(urlNode);
+                    logger.debug("Adding url node {} as child to node {}", uri, currentPageNode.getUrl());
+                    currentPageNode.addChild(urlNode);
                 }
             }
         }
 
     }
 
+    private UrlNode getOrCreateUrlNode(UrlNode currentUrlNode, URI uri) {
+        UrlNode urlNode;
+        if (visitedUrls.containsKey(uri.toString())) {
+            logger.debug("Url {} has already been visited, reusing previous value", uri);
+            urlNode = visitedUrls.get(uri.toString()).clone(currentUrlNode);
+        } else {
+            logger.debug("Adding url {} to visited urls", uri);
+            urlNode = new UrlNode(uri, currentUrlNode);
+        }
+        return urlNode;
+    }
+
     private static String getUrlDomain(String uri) {
         return uri.startsWith("www.") ? uri.substring(4) : uri;
     }
 
-    private static URI createUri(URI basePath, Element link) {
-        String href = link.attr("href");
 
-        // to handle relative paths like ./document.html
-        if (href.startsWith(".")) {
-            href = href.substring(1);
-        }
-        URI uri = URI.create(href);
-
-        if (!uri.isAbsolute()) {
-            logger.trace("Adding relative path {} to base path {}", href, basePath);
-            uri = URI.create(basePath.toString() + href);
-        }
-
-        if (!StringUtils.equals(uri.getScheme(), "http") && !StringUtils.equals(uri.getScheme(), "https")) {
-            logger.debug("Skipping non-http/https url {}", uri);
-            return null;
-        }
-
-        try {
-            return new URIBuilder()
-                    .setScheme(uri.getScheme())
-                    .setHost(uri.getHost())
-                    .setPath(uri.getPath())
-                    .build();
-        } catch (URISyntaxException e) {
-            logger.error("Failed to create clean URI from {}", uri, e);
-            return null;
-        }
-    }
 }
