@@ -32,7 +32,7 @@ public class CrawlerServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        crawler = new CrawlerService(webService);
+        crawler = new CrawlerService(webService, 2, 1);
     }
 
     @Captor

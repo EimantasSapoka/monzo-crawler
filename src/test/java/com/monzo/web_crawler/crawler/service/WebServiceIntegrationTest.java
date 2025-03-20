@@ -6,8 +6,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
@@ -20,9 +18,6 @@ public class WebServiceIntegrationTest {
 
     @Autowired
     private WebService webService;
-
-    @Value("classpath:/service/test_url_links.html")
-    private Resource stubPage;
 
     @Test
     public void crawl_testUrlPage_parsesHyperlinks_returnsListOfUrls() throws IOException {
