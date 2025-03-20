@@ -26,8 +26,6 @@ public class CrawlerUnitTest {
     @Mock
     private WebService webService;
 
-
-
     private Crawler crawler;
 
     private final URI rootUrl = URI.create("https://www.monzo.com");
@@ -96,6 +94,20 @@ public class CrawlerUnitTest {
         Assertions.assertEquals(0, cycleNode2.getChildren().get(0).getChildren().size(), "Cycle node's children should not have any children to prevent infinite loop");
         Assertions.assertEquals(0, cycleNode2.getChildren().get(1).getChildren().size(), "Cycle node's children should not have any children to prevent infinite loop");
 
+    }
+
+    @Test
+    public void crawl_multiplePagesHaveSameLink_processesThatLinkOnlyOnce() throws IOException {
+        // ARRANGE
+        // it will add /help and /repeated to work queue. Then it will crawl /help page and add /repeated to work queue again. Need to make sure /repeated is only crawled once.
+        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com/help", "https://www.monzo.com/repeated"));
+        Mockito.when(webService.getDocument("https://www.monzo.com/help")).thenReturn(List.of("https://www.monzo.com/repeated"));
+
+        // ACT
+        crawler.crawl();
+
+        // ASSERT
+        Mockito.verify(webService, Mockito.times(1)).getDocument("https://www.monzo.com/repeated");
     }
 
 

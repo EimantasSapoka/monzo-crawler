@@ -68,8 +68,10 @@ public class Crawler {
                     logger.debug("Skipping url from being added to work queue {} as it is not from the same host {}", uri, host);
                 } else if (visitedUrls.containsKey(uri.toString())) {
                     logger.debug("Skipping url from being added to work queue {} as it has already been visited", uri);
+                } else if (workQueue.stream().anyMatch(node -> node.getUrl().equals(urlNode.getUrl()))) {
+                    logger.debug("Skipping url from being added to work queue {} as it is already in work queue", uri);
                 } else {
-                    logger.debug("Adding url {} to work queue", uri);
+                    logger.info("Adding url {} to work queue", uri);
                     workQueue.add(urlNode);
                 }
 

@@ -16,7 +16,7 @@ public class WebService {
     private static final Logger logger = LoggerFactory.getLogger(WebService.class);
 
     public List<String> getDocument(String path) throws IOException {
-        logger.debug("Fetching document from {}", path);
+        logger.info("Fetching document from {}", path);
         Document doc = Jsoup.connect(path).get();
         Elements links = doc.select("a[href]");
         return links.eachAttr("abs:href");

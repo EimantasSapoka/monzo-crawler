@@ -52,7 +52,7 @@ public class UrlNode {
 
     public UrlNode clone(UrlNode parent) {
         UrlNode urlNode = new UrlNode(url, parent);
-        children.forEach(child -> urlNode.addChild(child.clone(urlNode)));
+        children.forEach(urlNode::addChild);
         return urlNode;
     }
 
