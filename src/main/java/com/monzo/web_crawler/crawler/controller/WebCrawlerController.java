@@ -31,6 +31,10 @@ public class WebCrawlerController {
     public ResponseEntity<UrlNode> crawl(@RequestBody @Valid CrawlRequest crawlRequest) {
         try {
             URI domain = URI.create(crawlRequest.getDomain());
+            if (!"https".equalsIgnoreCase(domain.getScheme()) && !"http".equalsIgnoreCase(domain.getScheme())) {
+                logger.error("Invalid scheme for URL: {}", crawlRequest.getDomain());
+                return ResponseEntity.badRequest().body(null);
+            }
             UrlNode crawlResponse = crawlerService.crawl(domain);
             return ResponseEntity.ok(crawlResponse);
         } catch (Exception e) {

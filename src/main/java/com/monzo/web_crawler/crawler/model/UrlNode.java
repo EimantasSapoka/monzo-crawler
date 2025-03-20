@@ -1,6 +1,7 @@
 package com.monzo.web_crawler.crawler.model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 
 import java.net.URI;
@@ -11,6 +12,8 @@ import java.util.List;
 public class UrlNode {
 
     private final URI url;
+
+    @JsonIgnore
     private final UrlNode parent;
     private final List<UrlNode> children = new ArrayList<>();
 

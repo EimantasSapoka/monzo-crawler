@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ExtendWith(MockitoExtension.class)
-public class WebCrawlerUnitTest {
+public class WebCrawlerControllerUnitTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -77,6 +77,17 @@ public class WebCrawlerUnitTest {
                                 .content("""
                                         {
                                           "domain": "test_not_uri"
+                                        }
+                                        """)
+                )
+                .andExpect(status().isBadRequest());
+
+        this.mockMvc.perform(
+                        post("/api/v1/crawl")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "domain": "www.no-scheme.com"
                                         }
                                         """)
                 )

@@ -13,7 +13,18 @@ public class URIUtils {
 
     public static URI createUri(URI basePath, String url) {
         String href = url.strip().replaceAll("\\s+", "%20");
-        URI uri = URI.create(href);
+
+        if (href.endsWith("/")) {
+            href = href.substring(0, href.length() - 1);
+        }
+
+        URI uri;
+        try {
+            uri = URI.create(href);
+        } catch (Exception e) {
+            logger.debug("Skipping invalid url {}", href);
+            return null;
+        }
 
         // to handle relative paths like ./document.html
         if (!uri.isAbsolute()) {

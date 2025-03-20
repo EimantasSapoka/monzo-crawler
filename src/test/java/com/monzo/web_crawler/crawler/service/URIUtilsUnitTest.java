@@ -15,6 +15,7 @@ public class URIUtilsUnitTest {
 
         // ACT / ASSERT
         Assertions.assertEquals("https://example.com", URIUtils.createUri(basePath, "https://example.com").toString());
+        Assertions.assertEquals("https://example.com", URIUtils.createUri(basePath, "https://example.com/").toString());
         Assertions.assertEquals("http://example.org", URIUtils.createUri(basePath, "http://example.org").toString());
         Assertions.assertEquals(basePath + "/example.org", URIUtils.createUri(basePath, "example.org").toString());
         Assertions.assertEquals(basePath + "/www.example.org", URIUtils.createUri(basePath, "www.example.org").toString());

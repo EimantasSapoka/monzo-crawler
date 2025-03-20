@@ -16,7 +16,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.monzo" level="DEBUG"/>
+    <logger name="com.monzo" level="INFO"/>
 
     <!-- Root Logger -->
     <root level="info">

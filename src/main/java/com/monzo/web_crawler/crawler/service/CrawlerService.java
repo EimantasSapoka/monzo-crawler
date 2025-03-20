@@ -41,7 +41,10 @@ public class CrawlerService {
         // add the root page to work queue
         workQueue.add(root);
 
-        try (ExecutorService pool = new ScheduledThreadPoolExecutor(threadPoolSize)) {
+        // a latch that will force main thread to wait until all threads are finished
+        CountDownLatch latch = new CountDownLatch(threadPoolSize);
+
+        try (ExecutorService pool = Executors.newFixedThreadPool(threadPoolSize)) {
 
             // start thread workers that will crawl pages
             for (int i = 0; i < threadPoolSize; i++) {
@@ -50,28 +53,33 @@ public class CrawlerService {
                 // if neither is true they will finish
                 // some extra error handling in case it can't get item within certain time or in case it gets null from queue for whatever reason
                 pool.execute(() -> {
-                    while (!workQueue.isEmpty() || activeWorkerCount.get() > 0) {
-                        UrlNode urlToCrawl;
-                        try {
-                            urlToCrawl = workQueue.poll(1, TimeUnit.SECONDS);
-                        } catch (InterruptedException e) {
-                            logger.warn("Thread interrupted while waiting for work queue to poll");
-                            continue;
+                    try {
+                        while (!workQueue.isEmpty() || activeWorkerCount.get() > 0) {
+                            UrlNode urlToCrawl;
+                            try {
+                                urlToCrawl = workQueue.poll(1, TimeUnit.SECONDS);
+                            } catch (InterruptedException e) {
+                                logger.warn("Thread interrupted while waiting for work queue to poll");
+                                continue;
+                            }
+                            if (Objects.isNull(urlToCrawl)) {
+                                logger.warn("Thread received null url to crawl");
+                                continue;
+                            }
+                            Crawler crawler = new Crawler(webService, workQueue, visitedUrls, domain);
+                            activeWorkerCount.incrementAndGet();
+                            crawler.crawl(urlToCrawl);
+                            activeWorkerCount.decrementAndGet();
                         }
-                        if (Objects.isNull(urlToCrawl)) {
-                            logger.warn("Thread received null url to crawl");
-                            continue;
-                        }
-                        Crawler crawler = new Crawler(webService, workQueue, visitedUrls, domain);
-                        activeWorkerCount.incrementAndGet();
-                        crawler.crawl(urlToCrawl);
-                        activeWorkerCount.decrementAndGet();
+                    } finally {
+                        latch.countDown();
                     }
                 });
             }
 
             // Await termination to ensure all tasks complete before returning root
             try {
+                latch.await(); // main thread waits until all threads are finished
                 pool.shutdown();
                 boolean finishedSuccessfully = pool.awaitTermination(crawlTimeoutMinutes, TimeUnit.MINUTES);
                 if (!finishedSuccessfully) {
