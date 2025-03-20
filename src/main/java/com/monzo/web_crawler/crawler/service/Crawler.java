@@ -9,8 +9,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Crawler {
 
@@ -18,29 +16,20 @@ public class Crawler {
 
     private final WebService webService;
 
-    private final Queue<UrlNode> workQueue = new ConcurrentLinkedQueue<>();
-    private final Map<String, UrlNode> visitedUrls = new ConcurrentHashMap<>();
-    private final URI rootUri;
+    private final Queue<UrlNode> workQueue;
+    private final Map<String, UrlNode> visitedUrls;
+
     private final String host;
 
-    public Crawler(WebService webService, URI rootUri) {
+
+    public Crawler(WebService webService, Queue<UrlNode> workQueue, Map<String, UrlNode> visitedUrls, URI domain) {
         this.webService = webService;
-        this.rootUri = rootUri;
-        this.host = getUrlDomain(rootUri.getHost());
+        this.host = getUrlDomain(domain.getHost());
+        this.workQueue = workQueue;
+        this.visitedUrls = visitedUrls;
     }
 
-    public UrlNode crawl() {
-        UrlNode root = new UrlNode(rootUri, null);
-        workQueue.add(root);
-
-        while (!workQueue.isEmpty()) {
-            processUrlNode(workQueue.poll());
-        }
-
-        return root;
-    }
-
-    private void processUrlNode(UrlNode currentPageNode) {
+    public void crawl(UrlNode currentPageNode) {
         logger.debug("Processing url {}", currentPageNode.getUrl());
 
         String path = currentPageNode.getUrl().toString();

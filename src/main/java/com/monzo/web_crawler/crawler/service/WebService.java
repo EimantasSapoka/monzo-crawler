@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.List;
 
 @Service
@@ -17,8 +20,21 @@ public class WebService {
 
     public List<String> getDocument(String path) throws IOException {
         logger.info("Fetching document from {}", path);
-        Document doc = Jsoup.connect(path).get();
-        Elements links = doc.select("a[href]");
-        return links.eachAttr("abs:href");
+        URL url = URI.create(path).toURL();
+        URLConnection connection = url.openConnection();
+        connection.connect();
+        String mimeType = connection.getContentType();
+        if (!mimeType.contains("text/") && !mimeType.contains("/xml") && !mimeType.endsWith("+xml")) {
+            logger.debug("Skipping non-html document {}", path);
+            return List.of();
+        }
+        try {
+            Document doc = Jsoup.connect(path).get();
+            Elements links = doc.select("a[href]");
+            return links.eachAttr("abs:href");
+        } catch (Exception e) {
+            logger.error("Failed to fetch document from {}", path, e);
+            return List.of();
+        }
     }
 }

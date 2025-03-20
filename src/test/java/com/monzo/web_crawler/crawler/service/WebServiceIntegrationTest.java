@@ -25,7 +25,7 @@ public class WebServiceIntegrationTest {
     private Resource stubPage;
 
     @Test
-    public void crawl_testUrlPage_parsesAllTypesOfUrl_returnsCorrectListOfUrls() throws IOException {
+    public void crawl_testUrlPage_parsesHyperlinks_returnsListOfUrls() throws IOException {
         // ARRANGE
 
         // ACT
@@ -36,4 +36,5 @@ public class WebServiceIntegrationTest {
         // let's make the assumption the help page will always be in the main page
         Assertions.assertTrue(urls.stream().anyMatch(url -> StringUtils.equals(url, "https://monzo.com/help")));
     }
+
 }
