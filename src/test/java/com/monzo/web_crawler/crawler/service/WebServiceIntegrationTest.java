@@ -11,6 +11,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = WebService.class)
@@ -20,11 +21,11 @@ public class WebServiceIntegrationTest {
     private WebService webService;
 
     @Test
-    public void crawl_testUrlPage_parsesHyperlinks_returnsListOfUrls() throws IOException {
+    public void crawl_testUrlPage_parsesHyperlinks_returnsListOfUrls() throws IOException, TimeoutException {
         // ARRANGE
 
         // ACT
-        List<String> urls = webService.getDocument("https://www.monzo.com");
+        List<String> urls = webService.getDocumentLinks("https://www.monzo.com");
 
         // ASSERT
         Assertions.assertTrue(urls.size() > 1);

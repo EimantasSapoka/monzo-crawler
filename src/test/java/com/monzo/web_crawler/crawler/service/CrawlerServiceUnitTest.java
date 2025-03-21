@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.service;
 
-import com.monzo.web_crawler.crawler.model.UrlNode;
+import com.monzo.web_crawler.crawler.model.Page;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,8 +16,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.TimeoutException;
 
 @ExtendWith(SpringExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -32,81 +31,91 @@ public class CrawlerServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        crawler = new CrawlerService(webService, 1);
+        crawler = new CrawlerService(webService, 2, 10, 10);
     }
 
     @Captor
     private ArgumentCaptor<String> urlCaptor;
 
     @Test
-    public void crawl_monzoPage_makesRequestToUrlsWithinPage_returnsAllUrlsFromPage_noDuplicates() throws IOException {
+    public void crawl_monzoPage_makesRequestToUrlsWithinPage_returnsAllUrlsFromRequiredDomain_noDuplicates() throws IOException, TimeoutException {
         // ARRANGE
-        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/help", "https://www.monzo.com/faq", "https://www.monzo.com/faq", "https://www.monzo.com/faq"));
+        Mockito.when(webService.getDocumentLinks(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/help", "https://www.monzo.com/faq", "https://www.monzo.com/faq", "https://www.monzo.com/faq"));
 
-        Mockito.when(webService.getDocument("https://www.monzo.com/faq")).thenReturn(List.of("https://www.monzo.com", "https://www.google.com", "https://www.test.com", "https://www.monzo.com/fraud"));
+        Mockito.when(webService.getDocumentLinks("https://www.monzo.com/faq")).thenReturn(List.of("https://www.monzo.com", "https://www.google.com", "https://www.test.com", "https://www.monzo.com/fraud"));
 
         // any other page should return empty page with no links to simplify
-        Mockito.when(webService.getDocument(Mockito.argThat(url -> !url.equals(rootUrl.toString()) && !url.equals("https://www.monzo.com/faq")))).thenReturn(List.of());
+        Mockito.when(webService.getDocumentLinks(Mockito.argThat(url -> !url.equals(rootUrl.toString()) && !url.equals("https://www.monzo.com/faq")))).thenReturn(List.of());
 
         // ACT
-        UrlNode result = crawler.crawl(rootUrl);
+        List<Page> result = crawler.crawl(rootUrl);
 
         // ASSERT
-        Assertions.assertEquals(rootUrl, result.getUrl());
-        Assertions.assertEquals(2, result.getChildren().size());
-        Set<String> uniqueChildUrls = result.getChildren().stream().map(child -> child.getUrl().toString()).collect(Collectors.toSet());
-        Assertions.assertEquals(uniqueChildUrls.size(), result.getChildren().size(), "There should be no duplicate child URLs");
+        Page firstPage = result.get(0);
+        Assertions.assertEquals(rootUrl, firstPage.getUrl());
+        Assertions.assertEquals(3, firstPage.getChildren().size());
+        assertContainsChildPage(firstPage, "https://www.monzo.com");
+        assertContainsChildPage(firstPage, "https://www.monzo.com/help");
+        assertContainsChildPage(firstPage, "https://www.monzo.com/faq");
 
-        UrlNode monzoFaqNode = result.getChildren()
+        Page monzoFaqPage = result
                 .stream()
-                .filter(node -> StringUtils.equals(node.getUrl().toString(), "https://www.monzo.com/faq"))
+                .filter(page -> StringUtils.equals(page.getUrl().toString(), "https://www.monzo.com/faq"))
                 .findFirst().get();
 
-        Assertions.assertEquals(3, monzoFaqNode.getChildren().size());
+        Assertions.assertEquals(4, monzoFaqPage.getChildren().size());
+        assertContainsChildPage(monzoFaqPage, "https://www.monzo.com");
+        assertContainsChildPage(monzoFaqPage, "https://www.google.com");
+        assertContainsChildPage(monzoFaqPage, "https://www.test.com");
+        assertContainsChildPage(monzoFaqPage, "https://www.monzo.com/fraud");
 
         // verify all calls to web service to retrieve documents are for monzo.com domain as per requirement
-        Mockito.verify(webService, Mockito.atLeast(1)).getDocument(urlCaptor.capture());
+        Mockito.verify(webService, Mockito.atLeast(1)).getDocumentLinks(urlCaptor.capture());
         String expectedDomain = rootUrl.getHost().replace("www.", "");
         urlCaptor.getAllValues().forEach(url -> Assertions.assertEquals(URI.create(url).getHost().replace("www.", ""), expectedDomain));
     }
 
+    private static void assertContainsChildPage(Page monzoFaqPage, String url) {
+        Assertions.assertTrue(monzoFaqPage.getChildren().stream().anyMatch(uri -> uri.toString().equals(url)),
+                "Expected page " + monzoFaqPage.getUrl() + " to have child page with URL: " + url);
+    }
+
 
     @Test
-    public void crawl_cyclicalLink_doesNotLoopForever() throws IOException {
+    public void crawl_cyclicalLink_doesNotLoopForever() throws IOException, TimeoutException {
         // ARRANGE
-        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle"));
-        Mockito.when(webService.getDocument("https://www.monzo.com/cycle")).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle", "https://www.monzo.com/cycle2"));
-        Mockito.when(webService.getDocument("https://www.monzo.com/cycle2")).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle", "https://www.monzo.com/cycle2"));
+        Mockito.when(webService.getDocumentLinks(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle"));
+        Mockito.when(webService.getDocumentLinks("https://www.monzo.com/cycle")).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle", "https://www.monzo.com/cycle2"));
+        Mockito.when(webService.getDocumentLinks("https://www.monzo.com/cycle2")).thenReturn(List.of("https://www.monzo.com", "https://www.monzo.com/cycle", "https://www.monzo.com/cycle2"));
 
         // ACT
-        UrlNode monzoPage = crawler.crawl(rootUrl);
+        List<Page> pages = crawler.crawl(rootUrl);
 
         // ASSERT
+        Page monzoPage = pages.get(0);
         Assertions.assertEquals(rootUrl, monzoPage.getUrl());
-        Assertions.assertEquals(1, monzoPage.getChildren().size(), "There should be one child URL");
-        Assertions.assertEquals("https://www.monzo.com/cycle", monzoPage.getChildren().stream().findFirst().get().getUrl().toString(), "Child URL should be monzo.com/cycle");
+        Assertions.assertEquals(2, monzoPage.getChildren().size());
 
-        UrlNode cycleNode = monzoPage.getChildren().stream().findFirst().get();
-        Assertions.assertEquals(1, cycleNode.getChildren().size(), "There should be one child URLs, monzo.com/cycle2");
+        Page cyclePage = pages.get(1);
+        Assertions.assertEquals(3, cyclePage.getChildren().size());
 
-        UrlNode cycleNode2 = cycleNode.getChildren().get(0);
-        Assertions.assertEquals(0, cycleNode2.getChildren().size(), "There should be no child URLs");
+        Page cycleNode2 = pages.get(2);
+        Assertions.assertEquals(3, cycleNode2.getChildren().size());
 
     }
 
     @Test
-    public void crawl_multiplePagesHaveSameLink_processesThatLinkOnlyOnce() throws IOException {
+    public void crawl_multiplePagesHaveSameLink_processesThatLinkOnlyOnce() throws IOException, TimeoutException {
         // ARRANGE
         // it will add /help and /repeated to work queue. Then it will crawl /help page and add /repeated to work queue again. Need to make sure /repeated is only crawled once.
-        Mockito.when(webService.getDocument(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com/help", "https://www.monzo.com/repeated"));
-        Mockito.when(webService.getDocument("https://www.monzo.com/help")).thenReturn(List.of("https://www.monzo.com/repeated"));
+        Mockito.when(webService.getDocumentLinks(rootUrl.toString())).thenReturn(List.of("https://www.monzo.com/help", "https://www.monzo.com/repeated"));
+        Mockito.when(webService.getDocumentLinks("https://www.monzo.com/help")).thenReturn(List.of("https://www.monzo.com/repeated"));
 
         // ACT
         crawler.crawl(rootUrl);
 
         // ASSERT
-        Mockito.verify(webService, Mockito.times(1)).getDocument("https://www.monzo.com/repeated");
+        Mockito.verify(webService, Mockito.times(1)).getDocumentLinks("https://www.monzo.com/repeated");
     }
-
 
 }

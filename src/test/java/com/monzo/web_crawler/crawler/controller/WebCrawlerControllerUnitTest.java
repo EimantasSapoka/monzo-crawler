@@ -1,6 +1,6 @@
 package com.monzo.web_crawler.crawler.controller;
 
-import com.monzo.web_crawler.crawler.model.UrlNode;
+import com.monzo.web_crawler.crawler.model.Page;
 import com.monzo.web_crawler.crawler.service.CrawlerService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +14,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.net.URI;
+import java.util.List;
+import java.util.Set;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -33,10 +35,9 @@ public class WebCrawlerControllerUnitTest {
     @Test
     public void postCrawlerRequest_callsCrawlerService() throws Exception {
         // ARRANGE
-        UrlNode rootNode = new UrlNode(URI.create("www.monzo.com"), null);
-        UrlNode childNode = new UrlNode(URI.create("www.monzo.com/help"), rootNode);
-        rootNode.addChild(childNode);
-        Mockito.when(crawlerService.crawl(Mockito.eq(URI.create("https://www.monzo.com")))).thenReturn(rootNode);
+        Page mainPage = new Page(URI.create("www.monzo.com"), Set.of(URI.create("www.monzo.com/help")));
+        Page helpPage = new Page(URI.create("www.monzo.com/help"), Set.of());
+        Mockito.when(crawlerService.crawl(Mockito.eq(URI.create("https://www.monzo.com")))).thenReturn(List.of(mainPage, helpPage));
 
         String requestBody = """
                 {
@@ -46,13 +47,19 @@ public class WebCrawlerControllerUnitTest {
 
         String expectedResponse = """
                 {
-                  "url": "www.monzo.com",
-                  "children": [
-                       {
-                        "url": "www.monzo.com/help",
-                        "children": []
-                       }
-                  ]
+                    "pageCount": 2,
+                    "pages": [
+                        {
+                           "url": "www.monzo.com",
+                           "children": [
+                                 "www.monzo.com/help"
+                           ]
+                         },
+                         {
+                           "url": "www.monzo.com/help",
+                           "children": []
+                         }
+                     ]
                 }
                 """;
 

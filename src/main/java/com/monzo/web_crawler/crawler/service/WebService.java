@@ -21,8 +21,8 @@ public class WebService {
 
     private static final Logger logger = LoggerFactory.getLogger(WebService.class);
 
-    public List<String> getDocument(String path) throws IOException {
-        logger.info("Fetching document from {}", path);
+    public List<String> getDocumentLinks(String path) throws IOException, TimeoutException {
+        logger.debug("Fetching document from {}", path);
         URL url = URI.create(path).toURL();
         URLConnection connection = url.openConnection();
         connection.connect();
@@ -37,7 +37,7 @@ public class WebService {
                     long startTime = System.currentTimeMillis();
                     Document doc = Jsoup.connect(path).timeout(3000).get();
                     long endTime = System.currentTimeMillis();
-                    logger.info("Fetching document from {} took {} ms", path, (endTime - startTime));
+                    logger.debug("Fetching document from {} took {} ms", path, (endTime - startTime));
                     Elements links = doc.select("a[href]");
                     return links.eachAttr("abs:href");
                 } catch (IOException e) {
@@ -45,10 +45,9 @@ public class WebService {
                 }
             }).get(3, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            logger.error("Request to fetch document from {} timed out after 3 seconds", path);
+            throw new TimeoutException(String.format("Failed to fetch document from %s within 3 seconds", path));
         } catch (Exception e) {
-            logger.error("Failed to fetch document from {}", path, e);
+            throw new RuntimeException(String.format("Failed to fetch document from %s", path), e);
         }
-        return List.of();
     }
 }

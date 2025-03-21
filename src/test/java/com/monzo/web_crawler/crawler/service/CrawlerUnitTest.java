@@ -1,133 +1,78 @@
 package com.monzo.web_crawler.crawler.service;
 
-import com.monzo.web_crawler.crawler.model.UrlNode;
+import com.monzo.web_crawler.crawler.model.Page;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.io.IOException;
 import java.net.URI;
-import java.util.*;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeoutException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
-@ExtendWith(SpringExtension.class)
 public class CrawlerUnitTest {
 
-    @Mock
-    private WebService webService;
-
-
-    private Map<String, UrlNode> visitedUrls;
-    private Set<String> seenUrls;
-
-    private final URI domain = URI.create("https://example.com");
-    private UrlNode parentNode;
-
+    private WebService webServiceMock;
     private Crawler crawler;
+
+    private final URI currentPageUri = URI.create("http://example.com");
 
     @BeforeEach
     void setUp() {
-        parentNode = new UrlNode(domain, null);
-        visitedUrls = new HashMap<>();
-        seenUrls = new HashSet<>();
-        crawler = new Crawler(webService, visitedUrls, seenUrls, domain);
-
+        webServiceMock = mock(WebService.class);
+        crawler = new Crawler(webServiceMock);
     }
 
     @Test
-    void shouldAddUrlsToWorkQueue_whenUrlsAreFromSameHostAndNotVisited() throws Exception {
+    void testCrawlSuccessful() throws IOException, TimeoutException {
         // Arrange
-        when(webService.getDocument("https://example.com")).thenReturn(List.of("/page1", "/page2"));
+        List<String> documentLinks = List.of("http://example.com/page1", "/page2", "http://example.org");
+        when(webServiceMock.getDocumentLinks(currentPageUri.toString())).thenReturn(documentLinks);
 
         // Act
-        List<UrlNode> resultNodes = crawler.crawl(parentNode);
+        Page resultPage = crawler.crawl(currentPageUri);
 
         // Assert
-        assertEquals(2, resultNodes.size());
-        assertTrue(resultNodes.stream().anyMatch(node -> node.getUrl().toString().equals("https://example.com/page1")));
-        assertTrue(resultNodes.stream().anyMatch(node -> node.getUrl().toString().equals("https://example.com/page2")));
+        assertNotNull(resultPage);
+        assertEquals(currentPageUri, resultPage.getUrl());
+        Set<URI> expectedLinks = Set.of(
+                URI.create("http://example.com/page1"),
+                URI.create("http://example.com/page2"),
+                URI.create("http://example.org")
+        );
+        assertEquals(expectedLinks, resultPage.getChildren());
+        verify(webServiceMock, times(1)).getDocumentLinks(currentPageUri.toString());
     }
 
     @Test
-    void shouldNotAddUrlToWorkQueue_whenUrlIsNotFromSameHost() throws Exception {
+    void testCrawlHandlesEmptyLinks() throws IOException, TimeoutException {
         // Arrange
-        when(webService.getDocument("https://example.com")).thenReturn(List.of("https://other.com/page1"));
+        when(webServiceMock.getDocumentLinks(currentPageUri.toString())).thenReturn(List.of());
 
         // Act
-        List<UrlNode> resultNodes = crawler.crawl(parentNode);
+        Page resultPage = crawler.crawl(currentPageUri);
 
         // Assert
-        assertEquals(0, resultNodes.size());
+        assertNotNull(resultPage);
+        assertEquals(currentPageUri, resultPage.getUrl());
+        assertTrue(resultPage.getChildren().isEmpty());
+        verify(webServiceMock, times(1)).getDocumentLinks(currentPageUri.toString());
     }
 
-    @Test
-    void shouldMarkUrlAsVisited_whenFetchedSuccessfully() throws Exception {
-        // Arrange
-        when(webService.getDocument("https://example.com")).thenReturn(List.of());
-
-        // Act
-        crawler.crawl(parentNode);
-
-        // Assert
-        assertTrue(visitedUrls.containsKey("https://example.com"));
-    }
 
     @Test
-    void shouldNotAddUrlToWorkQueue_whenUrlIsAlreadySeen() throws Exception {
+    void testCrawlHandlesWebServiceException() throws IOException, TimeoutException {
         // Arrange
-        seenUrls.add("https://example.com/page1");
-
-        when(webService.getDocument("https://example.com")).thenReturn(List.of("/page1"));
+        when(webServiceMock.getDocumentLinks(currentPageUri.toString())).thenThrow(new RuntimeException("WebService error"));
 
         // Act
-        List<UrlNode> resultNodes = crawler.crawl(parentNode);
+        Assertions.assertThrows(RuntimeException.class, () -> crawler.crawl(currentPageUri));
 
         // Assert
-        assertEquals(0, resultNodes.size());
-    }
-
-    @Test
-    void shouldHandleExceptionGracefully_whenWebServiceThrowsException() throws Exception {
-        // Arrange
-        when(webService.getDocument("https://example.com")).thenThrow(new RuntimeException("WebService failure"));
-
-        // Act
-        List<UrlNode> resultNodes = crawler.crawl(parentNode);
-
-        // Assert
-        assertTrue(visitedUrls.isEmpty());
-        assertTrue(resultNodes.isEmpty());
-    }
-
-    @Test
-    void shouldSkipAddingUrlAsChild_whenUrlIsAlreadyChild() throws Exception {
-        // Arrange
-        parentNode.addChild(new UrlNode(URI.create("https://example.com/page1"), parentNode));
-        when(webService.getDocument("https://example.com")).thenReturn(List.of("/page1", "/page1", "/page1"));
-
-        // Act
-        crawler.crawl(parentNode);
-
-        // Assert
-        Assertions.assertEquals(1, parentNode.getChildren().size());
-    }
-
-    @Test
-    void shouldAddChildNode_whenUrlNodeIsValidAndNotPresentAsChild() throws Exception {
-        // Arrange
-        when(webService.getDocument("https://example.com")).thenReturn(List.of("/page1"));
-
-        // Act
-        crawler.crawl(parentNode);
-
-        // Assert
-        Assertions.assertEquals(1, parentNode.getChildren().size());
+        verify(webServiceMock, times(1)).getDocumentLinks(currentPageUri.toString());
     }
 }

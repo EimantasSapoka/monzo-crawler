@@ -46,7 +46,7 @@ public class URIUtils {
                     .setPath(path)
                     .build();
         } catch (URISyntaxException e) {
-            logger.error("Failed to create clean URI from {}", uri, e);
+            logger.debug("Failed to create clean URI from {}", uri, e);
             return null;
         }
     }

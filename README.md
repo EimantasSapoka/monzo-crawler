@@ -9,15 +9,18 @@
 * Can use libraries to handle things like HTML parsing.
 * Productionize code
 
-## Assumptions
-
-* A page will not be listed as having itself as a child. I.e. if a page contains a link to itself it will not be shown
-* A cycle will be handled by not showing the url if it is already in hierarchy
 
 ## Running the application
 
-Disclaimer: I've run it against some pages and there's so much output that i couldn't get it printing as JSON.
-Even printing in text is a ton of output, so I'm writing it to file instead. It takes longer to write the file than to
-crawl. 
+Requires java 23. Within the project directory where web-crawler.jar is run
 
+```java -jar web-crawler.jar```
+
+navigate to http://localhost:8080/swagger-ui/index.html#/web-crawler-controller/crawl
+
+enter a url e.g. https://monzo.com in there and click execute.
+
+to change number of threads used pass -Dcrawler.thread-pool-size=5
+
+```java -jar web-crawler.jar -Dcrawler.thread-pool-size=5```
 

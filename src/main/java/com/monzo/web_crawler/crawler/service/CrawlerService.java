@@ -1,20 +1,26 @@
 package com.monzo.web_crawler.crawler.service;
 
-import com.monzo.web_crawler.crawler.model.UrlNode;
+import com.monzo.web_crawler.crawler.model.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-
+/**
+ * A service responsible for managing the crawling of web pages starting from a root URI.
+ * The service uses a configurable thread pool size, worker timeout, and manager timeout
+ * to manage the crawling process in an asynchronous manner.
+ * <p>
+ * This class interacts with the {@link WebService} to fetch and crawl web pages.
+ */
 @Service
 public class CrawlerService {
     private static final Logger logger = LoggerFactory.getLogger(CrawlerService.class);
@@ -22,81 +28,39 @@ public class CrawlerService {
     private final WebService webService;
 
     private final int threadPoolSize;
-
+    private final int crawlerWorkerTimeout;
+    private final int crawlerManagerTimeout;
 
     public CrawlerService(WebService webService,
-                          @Value("${crawler.thread-pool-size:5}") int threadPoolSize) {
+                          @Value("${crawler.thread-pool-size:5}") int threadPoolSize,
+                          @Value("${crawler.worker-timeout-seconds:2}") int crawlerWorkerTimeout,
+                          @Value("${crawler.manager-timeout-seconds:120}") int crawlerManagerTimeout) {
         this.webService = webService;
         this.threadPoolSize = threadPoolSize;
+        this.crawlerWorkerTimeout = crawlerWorkerTimeout;
+        this.crawlerManagerTimeout = crawlerManagerTimeout;
     }
 
-    public UrlNode crawl(URI domain) {
-        long startTime = System.currentTimeMillis(); // Start time for performance monitoring
-        UrlNode root = new UrlNode(domain, null);
+    public List<Page> crawl(URI rootPage) {
+        long startTime = System.currentTimeMillis();
+        List<Page> result = new ArrayList<>();
 
-        // setup thread safe collections to allow for parallel crawling
-        LinkedBlockingQueue<UrlNode> workQueue = new LinkedBlockingQueue<>(); // to keep adding new pages to crawl
+        CrawlerManager crawlerManager = new CrawlerManager(webService, threadPoolSize, crawlerWorkerTimeout);
+        CompletableFuture<List<Page>> future = CompletableFuture.supplyAsync(() -> crawlerManager.crawl(rootPage));
 
-        // to keep track of what pages have been crawled already to prevent double work
-        Map<String, UrlNode> visitedUrls = new ConcurrentHashMap<>();
-
-        // to keep track of urls that have been seen. Due to multithreaded nature a url could have been queued for work and no longer in work queue
-        // but still not processed and not appear in visitedUrls map
-        Set<String> seenUrls = new ConcurrentSkipListSet<>();
-
-        AtomicInteger jobCount = new AtomicInteger(0); // to keep track of workers actively crawling
-
-        // add the root page to work queue
-        workQueue.add(root);
-
-        try (ExecutorService pool = Executors.newFixedThreadPool(threadPoolSize)) {
-
-            // the main thread will keep polling the queue while there are urls to crawl OR there are workers still crawling
-            // it creates a crawler for each page that needs crawling and submits to the thread pool
-            while (!workQueue.isEmpty() || jobCount.get() > 0) {
-                UrlNode urlToCrawl;
-                logger.info("Active workers: {}. Work queue size: {}", jobCount.get(), workQueue.size());
-                try {
-                    urlToCrawl = workQueue.poll(1, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    logger.warn("Thread interrupted while waiting for work queue to poll");
-                    continue;
-                }
-                if (Objects.isNull(urlToCrawl)) {
-                    logger.warn("Thread received null url to crawl");
-                    continue;
-                }
-
-                jobCount.incrementAndGet();
-                pool.submit(() -> CompletableFuture.supplyAsync(() -> {
-                    try {
-                        Crawler crawler = new Crawler(webService, visitedUrls, seenUrls, domain);
-                        List<UrlNode> newNodes = crawler.crawl(urlToCrawl);
-                        workQueue.addAll(newNodes);
-                    } finally {
-                        jobCount.decrementAndGet();
-                    }
-                    return null;
-                }).get(3, TimeUnit.SECONDS));
-            }
-
-            // Await termination to ensure all tasks complete before returning root
-            try {
-                logger.info("All threads finished, shutting down thread pool");
-                pool.shutdown();
-                boolean finishedSuccessfully = pool.awaitTermination(1, TimeUnit.SECONDS);
-                if (!finishedSuccessfully) {
-                    logger.error("Thread pool did not terminate within expected time of {} seconds", 1);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Thread pool interrupted during execution", e);
-            }
+        try {
+            result = future.get(crawlerManagerTimeout, TimeUnit.SECONDS);
+            long endTime = System.currentTimeMillis();
+            logger.debug("Crawling completed in {} ms", (endTime - startTime));
+        } catch (TimeoutException e) {
+            logger.error("Task did not complete within {} seconds", crawlerManagerTimeout);
+            future.cancel(true);
+        } catch (InterruptedException | ExecutionException e) {
+            logger.error("Task failed", e);
         }
 
-        long endTime = System.currentTimeMillis(); // End time for performance monitoring
-        logger.info("Crawling completed in {} ms", (endTime - startTime));
-
-        return root;
+        return result;
     }
+
+
 }
