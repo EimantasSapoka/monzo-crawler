@@ -12,6 +12,9 @@ import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class WebService {
@@ -19,7 +22,6 @@ public class WebService {
     private static final Logger logger = LoggerFactory.getLogger(WebService.class);
 
     public List<String> getDocument(String path) throws IOException {
-        long startTime = System.currentTimeMillis();
         logger.info("Fetching document from {}", path);
         URL url = URI.create(path).toURL();
         URLConnection connection = url.openConnection();
@@ -30,14 +32,23 @@ public class WebService {
             return List.of();
         }
         try {
-            Document doc = Jsoup.connect(path).timeout(3000).get();
-            Elements links = doc.select("a[href]");
-            long endTime = System.currentTimeMillis();
-            logger.info("Fetched document from {} in {} ms", path, (endTime - startTime));
-            return links.eachAttr("abs:href");
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    long startTime = System.currentTimeMillis();
+                    Document doc = Jsoup.connect(path).timeout(3000).get();
+                    long endTime = System.currentTimeMillis();
+                    logger.info("Fetching document from {} took {} ms", path, (endTime - startTime));
+                    Elements links = doc.select("a[href]");
+                    return links.eachAttr("abs:href");
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }).get(3, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            logger.error("Request to fetch document from {} timed out after 3 seconds", path);
         } catch (Exception e) {
             logger.error("Failed to fetch document from {}", path, e);
-            return List.of();
         }
+        return List.of();
     }
 }

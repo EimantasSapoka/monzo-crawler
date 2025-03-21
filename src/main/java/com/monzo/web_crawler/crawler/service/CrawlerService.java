@@ -7,10 +7,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+
 
 @Service
 public class CrawlerService {
@@ -19,15 +22,12 @@ public class CrawlerService {
     private final WebService webService;
 
     private final int threadPoolSize;
-    private final int crawlTimeoutMinutes;
 
 
     public CrawlerService(WebService webService,
-                          @Value("${crawler.thread-pool-size:5}") int threadPoolSize,
-                          @Value("${crawler.crawl-timeout-minutes:10}") int crawlTimeoutMinutes) {
+                          @Value("${crawler.thread-pool-size:5}") int threadPoolSize) {
         this.webService = webService;
         this.threadPoolSize = threadPoolSize;
-        this.crawlTimeoutMinutes = crawlTimeoutMinutes;
     }
 
     public UrlNode crawl(URI domain) {
@@ -36,55 +36,57 @@ public class CrawlerService {
 
         // setup thread safe collections to allow for parallel crawling
         LinkedBlockingQueue<UrlNode> workQueue = new LinkedBlockingQueue<>(); // to keep adding new pages to crawl
-        Map<String, UrlNode> visitedUrls = new ConcurrentHashMap<>(); // to keep track of what pages have been crawled already to prevent double work
-        AtomicInteger activeWorkerCount = new AtomicInteger(0);
+
+        // to keep track of what pages have been crawled already to prevent double work
+        Map<String, UrlNode> visitedUrls = new ConcurrentHashMap<>();
+
+        // to keep track of urls that have been seen. Due to multithreaded nature a url could have been queued for work and no longer in work queue
+        // but still not processed and not appear in visitedUrls map
+        Set<String> seenUrls = new ConcurrentSkipListSet<>();
+
+        AtomicInteger jobCount = new AtomicInteger(0); // to keep track of workers actively crawling
 
         // add the root page to work queue
         workQueue.add(root);
 
-        // a latch that will force main thread to wait until all threads are finished
-        CountDownLatch latch = new CountDownLatch(threadPoolSize);
-
         try (ExecutorService pool = Executors.newFixedThreadPool(threadPoolSize)) {
 
-            // start thread workers that will crawl pages
-            for (int i = 0; i < threadPoolSize; i++) {
+            // the main thread will keep polling the queue while there are urls to crawl OR there are workers still crawling
+            // it creates a crawler for each page that needs crawling and submits to the thread pool
+            while (!workQueue.isEmpty() || jobCount.get() > 0) {
+                UrlNode urlToCrawl;
+                logger.info("Active workers: {}. Work queue size: {}", jobCount.get(), workQueue.size());
+                try {
+                    urlToCrawl = workQueue.poll(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    logger.warn("Thread interrupted while waiting for work queue to poll");
+                    continue;
+                }
+                if (Objects.isNull(urlToCrawl)) {
+                    logger.warn("Thread received null url to crawl");
+                    continue;
+                }
 
-                // each worker will stay alive until there are items in the queue OR there are other workers still crawling
-                // if neither is true they will finish
-                // some extra error handling in case it can't get item within certain time or in case it gets null from queue for whatever reason
-                pool.execute(() -> {
+                jobCount.incrementAndGet();
+                pool.submit(() -> CompletableFuture.supplyAsync(() -> {
                     try {
-                        while (!workQueue.isEmpty() || activeWorkerCount.get() > 0) {
-                            UrlNode urlToCrawl;
-                            try {
-                                urlToCrawl = workQueue.poll(1, TimeUnit.SECONDS);
-                            } catch (InterruptedException e) {
-                                logger.warn("Thread interrupted while waiting for work queue to poll");
-                                continue;
-                            }
-                            if (Objects.isNull(urlToCrawl)) {
-                                logger.warn("Thread received null url to crawl");
-                                continue;
-                            }
-                            Crawler crawler = new Crawler(webService, workQueue, visitedUrls, domain);
-                            activeWorkerCount.incrementAndGet();
-                            crawler.crawl(urlToCrawl);
-                            activeWorkerCount.decrementAndGet();
-                        }
+                        Crawler crawler = new Crawler(webService, visitedUrls, seenUrls, domain);
+                        List<UrlNode> newNodes = crawler.crawl(urlToCrawl);
+                        workQueue.addAll(newNodes);
                     } finally {
-                        latch.countDown();
+                        jobCount.decrementAndGet();
                     }
-                });
+                    return null;
+                }).get(3, TimeUnit.SECONDS));
             }
 
             // Await termination to ensure all tasks complete before returning root
             try {
-                latch.await(); // main thread waits until all threads are finished
+                logger.info("All threads finished, shutting down thread pool");
                 pool.shutdown();
-                boolean finishedSuccessfully = pool.awaitTermination(crawlTimeoutMinutes, TimeUnit.MINUTES);
+                boolean finishedSuccessfully = pool.awaitTermination(1, TimeUnit.SECONDS);
                 if (!finishedSuccessfully) {
-                    logger.error("Thread pool did not terminate within expected time of {} minutes", crawlTimeoutMinutes);
+                    logger.error("Thread pool did not terminate within expected time of {} seconds", 1);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

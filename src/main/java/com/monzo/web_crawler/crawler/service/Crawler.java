@@ -6,9 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
+import java.util.Set;
 
 public class Crawler {
 
@@ -16,20 +17,20 @@ public class Crawler {
 
     private final WebService webService;
 
-    private final Queue<UrlNode> workQueue;
     private final Map<String, UrlNode> visitedUrls;
+    private final Set<String> seenUrls;
 
     private final String host;
 
 
-    public Crawler(WebService webService, Queue<UrlNode> workQueue, Map<String, UrlNode> visitedUrls, URI domain) {
+    public Crawler(WebService webService, Map<String, UrlNode> visitedUrls, Set<String> seenUrls, URI domain) {
         this.webService = webService;
         this.host = getUrlDomain(domain.getHost());
-        this.workQueue = workQueue;
         this.visitedUrls = visitedUrls;
+        this.seenUrls = seenUrls;
     }
 
-    public void crawl(UrlNode currentPageNode) {
+    public List<UrlNode> crawl(UrlNode currentPageNode) {
         logger.debug("Processing url {}", currentPageNode.getUrl());
 
         String path = currentPageNode.getUrl().toString();
@@ -39,8 +40,9 @@ public class Crawler {
             visitedUrls.put(currentPageNode.getUrl().toString(), currentPageNode);
         } catch (Exception e) {
             logger.error("Failed to fetch document from url {}", path, e);
-            return;
+            return List.of();
         }
+        ArrayList<UrlNode> urlNodes = new ArrayList<>();
 
         for (String url : pageUrls) {
             URI uri = URIUtils.createUri(currentPageNode.getUrl(), url);
@@ -57,11 +59,12 @@ public class Crawler {
                     logger.debug("Skipping url from being added to work queue {} as it is not from the same host {}", uri, host);
                 } else if (visitedUrls.containsKey(uri.toString())) {
                     logger.debug("Skipping url from being added to work queue {} as it has already been visited", uri);
-                } else if (workQueue.stream().anyMatch(node -> node.getUrl().equals(urlNode.getUrl()))) {
+                } else if (seenUrls.contains(uri.toString())) {
                     logger.debug("Skipping url from being added to work queue {} as it is already in work queue", uri);
                 } else {
                     logger.info("Adding url {} to work queue", uri);
-                    workQueue.add(urlNode);
+                    urlNodes.add(urlNode);
+                    seenUrls.add(urlNode.getUrl().toString());
                 }
 
                 if (currentPageNode.containsChild(urlNode.getUrl())) {
@@ -78,7 +81,7 @@ public class Crawler {
                 }
             }
         }
-
+        return urlNodes;
     }
 
     private UrlNode getOrCreateUrlNode(UrlNode currentUrlNode, URI uri) {
