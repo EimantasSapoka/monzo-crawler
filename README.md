@@ -12,7 +12,12 @@
 ## Assumptions
 
 * A page will not be listed as having itself as a child. I.e. if a page contains a link to itself it will not be shown
-* A cycle will be handled by showing the URL as a child, but not it's children.
+* A cycle will be handled by not showing the url if it is already in hierarchy
 
-e.g. in page A has children B and C and page B has child A, the page A will show up as child of B but no children of A
-will be shown
+## Running the application
+
+Disclaimer: I've run it against some pages and there's so much output that i couldn't get it printing as JSON.
+Even printing in text is a ton of output, so I'm writing it to file instead. It takes longer to write the file than to
+crawl. 
+
+

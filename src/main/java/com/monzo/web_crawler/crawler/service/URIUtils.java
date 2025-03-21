@@ -14,10 +14,6 @@ public class URIUtils {
     public static URI createUri(URI basePath, String url) {
         String href = url.strip().replaceAll("\\s+", "%20");
 
-        if (href.endsWith("/")) {
-            href = href.substring(0, href.length() - 1);
-        }
-
         URI uri;
         try {
             uri = URI.create(href);
@@ -37,11 +33,17 @@ public class URIUtils {
             return null;
         }
 
+        String path = uri.getPath();
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+
         try {
+
             return new URIBuilder()
                     .setScheme(uri.getScheme())
                     .setHost(uri.getHost())
-                    .setPath(uri.getPath())
+                    .setPath(path)
                     .build();
         } catch (URISyntaxException e) {
             logger.error("Failed to create clean URI from {}", uri, e);

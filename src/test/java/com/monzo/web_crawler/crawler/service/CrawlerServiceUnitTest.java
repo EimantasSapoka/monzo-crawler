@@ -62,7 +62,7 @@ public class CrawlerServiceUnitTest {
                 .filter(node -> StringUtils.equals(node.getUrl().toString(), "https://www.monzo.com/faq"))
                 .findFirst().get();
 
-        Assertions.assertEquals(4, monzoFaqNode.getChildren().size());
+        Assertions.assertEquals(3, monzoFaqNode.getChildren().size());
 
         // verify all calls to web service to retrieve documents are for monzo.com domain as per requirement
         Mockito.verify(webService, Mockito.atLeast(1)).getDocument(urlCaptor.capture());
@@ -87,12 +87,10 @@ public class CrawlerServiceUnitTest {
         Assertions.assertEquals("https://www.monzo.com/cycle", monzoPage.getChildren().stream().findFirst().get().getUrl().toString(), "Child URL should be monzo.com/cycle");
 
         UrlNode cycleNode = monzoPage.getChildren().stream().findFirst().get();
-        Assertions.assertEquals(2, cycleNode.getChildren().size(), "There should be two child URLs, monzo.com and monzo.com/cycle2");
+        Assertions.assertEquals(1, cycleNode.getChildren().size(), "There should be one child URLs, monzo.com/cycle2");
 
-        UrlNode cycleNode2 = cycleNode.getChildren().get(1);
-        Assertions.assertEquals(2, cycleNode2.getChildren().size(), "There should be two child URLs, monzo.com and monzo.com/cycle");
-        Assertions.assertEquals(0, cycleNode2.getChildren().get(0).getChildren().size(), "Cycle node's children should not have any children to prevent infinite loop");
-        Assertions.assertEquals(0, cycleNode2.getChildren().get(1).getChildren().size(), "Cycle node's children should not have any children to prevent infinite loop");
+        UrlNode cycleNode2 = cycleNode.getChildren().get(0);
+        Assertions.assertEquals(0, cycleNode2.getChildren().size(), "There should be no child URLs");
 
     }
 

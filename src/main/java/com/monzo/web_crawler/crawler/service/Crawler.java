@@ -72,9 +72,7 @@ public class Crawler {
                 } else if (currentPageNode.getUrl().equals(urlNode.getUrl())) {
                     logger.debug("Skipping url node {} from being added as child as it is the same as node's {}", urlNode.getUrl(), currentPageNode.getUrl());
                 } else if (currentPageNode.hasAncestor(urlNode.getUrl())) {
-                    logger.debug("Url {} is already present in the ancestry of current node {}. Creating a clone of node with no children to prevent cycles", urlNode.getUrl(), currentPageNode.getUrl());
-                    urlNode.clearChildren();
-                    currentPageNode.addChild(urlNode);
+                    logger.debug("Skipping url node {} is already present in the ancestry of current node {}", urlNode.getUrl(), currentPageNode.getUrl());
                 } else {
                     logger.debug("Adding url node {} as child to node {}", uri, currentPageNode.getUrl());
                     currentPageNode.addChild(urlNode);
