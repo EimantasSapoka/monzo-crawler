@@ -51,7 +51,7 @@ public class CrawlerServiceUnitTest {
         List<Page> result = crawler.crawl(rootUrl);
 
         // ASSERT
-        Page firstPage = result.get(0);
+        Page firstPage = result.getFirst();
         Assertions.assertEquals(rootUrl, firstPage.getUrl());
         Assertions.assertEquals(3, firstPage.getChildren().size());
         assertContainsChildPage(firstPage, "https://www.monzo.com");
@@ -61,7 +61,7 @@ public class CrawlerServiceUnitTest {
         Page monzoFaqPage = result
                 .stream()
                 .filter(page -> StringUtils.equals(page.getUrl().toString(), "https://www.monzo.com/faq"))
-                .findFirst().get();
+                .findFirst().orElseGet(() -> Assertions.fail("Expected page with URL: https://www.monzo.com/faq to be present in result"));
 
         Assertions.assertEquals(4, monzoFaqPage.getChildren().size());
         assertContainsChildPage(monzoFaqPage, "https://www.monzo.com");
@@ -92,7 +92,7 @@ public class CrawlerServiceUnitTest {
         List<Page> pages = crawler.crawl(rootUrl);
 
         // ASSERT
-        Page monzoPage = pages.get(0);
+        Page monzoPage = pages.getFirst();
         Assertions.assertEquals(rootUrl, monzoPage.getUrl());
         Assertions.assertEquals(2, monzoPage.getChildren().size());
 
